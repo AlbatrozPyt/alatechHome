@@ -11,6 +11,7 @@ use app\models\Powersupply;
 use app\models\Processor;
 use app\models\Rammemory;
 use app\models\Storagedevice;
+use app\models\User;
 use Codeception\Lib\Interfaces\ActiveRecord;
 use Exception;
 use PhpParser\Node\Expr\Cast\Object_;
@@ -20,10 +21,12 @@ use yii\base\Model;
 use yii\data\ActiveDataProvider;
 use yii\db\ActiveRecord as DbActiveRecord;
 use yii\filters\auth\HttpBearerAuth;
+use yii\filters\ContentNegotiator;
 use yii\filters\VerbFilter;
 use yii\helpers\Url;
 use yii\rest\Controller;
 
+use yii\web\Response;
 use function PHPUnit\Framework\isNull;
 
 class ApiController extends Controller
@@ -40,7 +43,30 @@ class ApiController extends Controller
             ]
         ];
 
+
+
+        $behaviors['authenticator'] =[
+            'class' => HttpBearerAuth::class,
+        ];
+
         return $behaviors;
+    }
+
+
+    public function actionLogout()
+    {
+
+        $tokenAuth = \Yii::$app->request->headers->get("Authorization");
+        $tokenAuth = str_replace('Bearer ', '', $tokenAuth);
+
+        if (User::findIdentityByAccessToken($tokenAuth) != null)
+        {
+            $_SESSION['user'] = null;
+            return ['message' => 'Logout com sucesso'];
+        }
+        \Yii::$app->response->statusCode = 403;
+        $_SESSION['user'] = null;
+        return [$tokenAuth];
     }
 
 
@@ -148,9 +174,9 @@ class ApiController extends Controller
         return $provider->getModels();
     }
 
-    public function actionSearch($category, $q, $pageSize=20, $page=0)
+    public function actionSearch($category, $q, $pageSize = 20, $page = 0)
     {
-        $category = "app\\models\\".ucfirst($category);
+        $category = "app\\models\\" . ucfirst($category);
 
         $obj = [
             Motherboard::class,
@@ -164,19 +190,17 @@ class ApiController extends Controller
             Brand::class,
         ];
 
-        foreach ($obj as $class)
-        { 
-            if ($class === $category)
-            {
+        foreach ($obj as $class) {
+            if ($class === $category) {
                 $provider = new ActiveDataProvider([
                     'query' => $category::find(),
                     'pagination' => [
                         'pageSize' => $pageSize,
                         'page' => $page
                     ]
-                ]); 
+                ]);
 
-                $response = $category::find()->filterWhere(['like', 'name', $q.'%', false])->all();
+                $response = $category::find()->filterWhere(['like', 'name', $q . '%', false])->all();
                 return $response;
             }
         }
@@ -188,10 +212,25 @@ class ApiController extends Controller
     public function actionCreate()
     {
         $machine = new Machine();
-        if ($machine->load(Yii::$app->request->post(), '') && $machine->save()) {
-            return $machine;
+        if ($machine->load(Yii::$app->request->post(), '')) {
+
+            $imageBase64 = Yii::$app->request->post('imageBase64');
+
+            $imageBase64 = str_replace('data:image/jpeg;base64,', '', $imageBase64);
+            $bin = base64_decode($imageBase64);
+            $img_file = "../web/images/$machine->imageUrl.png";
+            file_put_contents($img_file, $bin);
+
+            $machine->Verificar();
+            if (Yii::$app->response->statusCode === 200)
+            {
+                $machine->save();
+                return $machine;
+            }
+            return $machine->Verificar();
         }
-        return $machine->errors;
+        Yii::$app->response->statusCode === 422;
+        return ['Post error' => 'Verifique os dados enviados.'];
     }
 
     public function actionDelete($id)
@@ -201,19 +240,37 @@ class ApiController extends Controller
         if ($machine !== null && $machine->delete()) {
             return Yii::$app->response->statusCode = 204;
         }
+
+        Yii::$app->response->statusCode = 404;
         return ['message' => 'Modelo de máquina não encontrado'];
     }
 
     public function actionUpdate($id)
     {
-        if (Yii::$app->request->bodyParams) {
-            $machine = Machine::findOne(['id' => $id]);
+        $machine = Machine::findOne(['id' => $id]);
 
-            if ($machine !== null && $machine->load(Yii::$app->request->post(), '') && $machine->save()) {
+        if ($machine !== null && $machine->load(Yii::$app->request->post(), '')) {
+
+            $imageBase64 = Yii::$app->request->post('imageBase64');
+
+            $imageBase64 = str_replace('data:image/jpeg;base64,', '', $imageBase64);
+            $bin = base64_decode($imageBase64);
+            $img_file = "../web/images/$machine->imageUrl.png";
+            file_put_contents($img_file, $bin);
+
+            $machine->Verificar();
+
+            if (Yii::$app->response->statusCode === 200)
+            {
+                $machine->save();
                 return $machine;
-            } else {
-                return ['message' => 'erro'];
             }
+
+            return $machine->Verificar();
+
+        } else {
+            Yii::$app->response->statusCode === 422;
+            return ['Post error' => 'Verifique os dados enviados.'];
         }
     }
 
@@ -230,9 +287,18 @@ class ApiController extends Controller
 
             return $response;
         } catch (Exception $e) {
+            Yii::$app->response->statusCode = 404;
             $response->format = yii\web\Response::FORMAT_JSON;
             $response->headers->add('content-type', 'application/json');
             return ['message' => 'Imagem não encontrada'];
         }
+    }
+
+    public function actionVerify()
+    {
+        $machine = new Machine();
+        $machine->load(Yii::$app->request->post(), '');
+
+        return $machine->Verificar();
     }
 }

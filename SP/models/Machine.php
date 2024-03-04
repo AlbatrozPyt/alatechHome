@@ -161,4 +161,54 @@ class Machine extends \yii\db\ActiveRecord
     {
         return $this->hasMany(Storagedevice::class, ['id' => 'storageDeviceId'])->viaTable('machinehasstoragedevice', ['machineId' => 'id']);
     }
+
+    public function getStorageDeviceSata()
+    {
+        return $this->getStorageDevices()->andWhere(['StorageDeviceInterface' => 'sata']);
+    }
+
+    public function getStorageDeviceM2()
+    {
+        return $this->getStorageDevices()->andWhere(['StorageDeviceInterface' => 'm2']);
+    }
+
+    public function Verificar()
+    {
+        Yii::$app->response->statusCode = 422;
+
+        if ( $this->motherboard->socketType->name !== $this->processor->socketType->name)
+        {
+            return ['SocketType' => 'SocketTypes diferentes.'];
+        }
+        else if ($this->processor->tdp > $this->motherboard->maxTdp) {
+            return ['TDP' > 'TDP maior que o suportado.'];
+        }
+        else if ($this->motherboard->ramMemoryType->name !== $this->ramMemory->ramMemoryType->name) {
+            return ['Ram Memory' > 'Ram memories diferentes.'];
+        }
+        else if ($this->ramMemoryAmount > $this->motherboard->ramMemorySlots) {
+            return ['Ram Memory Amount' > 'Mais Ram memories do que o suportado.'];
+        }
+        else if ($this->graphicCardAmount > $this->motherboard->pciSlots) {
+            return ['Graphic Cards Amount' > 'Mais Graphic Cards do que o suportado.'];
+        }
+        else if ($this->getStorageDeviceSata()->count() > $this->motherboard->sataSlots ) {
+            return ['Sata Slots' > 'Mais dispositivos Sata do que o suportado.'];
+        }
+        else if ($this->getStorageDeviceM2()->count() > $this->motherboard->m2Slots){
+            return ['M2 Slots' > 'Mais dispositivos Sata do que o suportado.'];
+        }
+        else if ($this->getStorageDeviceSata()->count() === 0 && $this->getStorageDeviceM2() === 0) {
+            return ['Storage Devices' > 'Deve haver pelo menos 1 Storage Device.'];
+        }
+        else if ($this->graphicCardAmount > 1 && $this->graphicCard->supportMultiGpu === 0) {
+            return ['Graphic Card' => 'A sua maquina não suporta mais de uma Graphic Card.'];
+        }
+        else if ($this->powerSupply->potency < $this->graphicCard->minimumPowerSupply*$this->graphicCardAmount) {
+            return ['Power Supply' => 'A potência da Power Supply é menor do que a potência esperada.'];
+        }
+
+        Yii::$app->response->statusCode = 200;
+        return ['message' => 'Máquina válida'];
+    }
 }

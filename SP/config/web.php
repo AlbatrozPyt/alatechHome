@@ -56,6 +56,7 @@ $config = [
             'enablePrettyUrl' => true,
             'showScriptName' => false,
             'rules' => [
+                'api/verify-compatibility' => 'api/verify',
                 'api/search/<category>' => 'api/search',
                 'api/images/<id:\d+>' => 'api/images',
                 'DELETE api/machines/<id:\d+>' => 'api/delete',

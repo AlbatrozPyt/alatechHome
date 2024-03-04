@@ -20,7 +20,6 @@ class AuthController extends Controller
 
     public function actionLogin()
     {
-
         if ($_SESSION['user'] === null)
         {
             $user = new User();
@@ -42,18 +41,4 @@ class AuthController extends Controller
         return ['message' => 'Usuário já autenticado'];
     }
 
-    public function actionLogout()
-    {
-
-        $tokenAuth = \Yii::$app->request->headers->set("Authorization:");
-
-        if (User::findIdentityByAccessToken($tokenAuth) != null)
-        {
-            $_SESSION['user'] = null;
-            return ['message' => 'Logout com sucesso'];
-        }
-        \Yii::$app->response->statusCode = 403;
-        $_SESSION['user'] = null;
-       return ['message' => 'Token inválido', 'token' => $tokenAuth];
-    }
 }
